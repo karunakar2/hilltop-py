@@ -1,4 +1,4 @@
-Forked to redirect to an equivalent with some limited functionality
+Forked to redirect to an equivalent with some limited functionality.  
 find it here. works for stream flow and gauging on HBRC OD platform
 https://github.com/hawkes-bay-rc/kHilltopConnector/releases/tag/v0.2
 
