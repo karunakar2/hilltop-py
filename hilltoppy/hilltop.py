@@ -68,7 +68,7 @@ def measurement_list(hts, sites=None):
         try:
             info1 = Hilltop.MeasurementList(dfile1, i)
         except SystemError as err:
-            print('Site ' + str(i) + " didn't work. Error: " + str(err))
+            print(f"Site {str(i)} didn't work. Error: {str(err)}")
             continue
         info1.loc[:, 'site'] = i.encode('ascii', 'ignore').decode()
         site_info_list.append(info1)
@@ -80,13 +80,15 @@ def measurement_list(hts, sites=None):
     bad_sites = site_info[site_info['Start Time'].isnull() | site_info['End Time'].isnull() | (site_info['Start Time'] < '1900-01-01') | (site_info['End Time'] > pd.Timestamp.today())]
 
     if not bad_sites.empty:
-        print('There are ' + str(len(bad_sites)) + ' sites with bad times')
+        print(f'There are {len(bad_sites)} sites with bad times')
         print(bad_sites)
         site_info = site_info[~(site_info['Start Time'].isnull() | site_info['End Time'].isnull() | (site_info['Start Time'] < '1900-01-01') | (site_info['End Time'] > pd.Timestamp.today()))]
 
     len_all = len(site_list)
     len_got = len(site_info.site.unique())
-    print('Missing ' + str(len_all - len_got) + ' sites, which is ' + str(round(100 * ((len_all - len_got)/len_all), 1)) + '% of the total')
+    print(
+        f'Missing {str(len_all - len_got)} sites, which is {str(round(100 * ((len_all - len_got) / len_all), 1))}% of the total'
+    )
 
     Hilltop.Disconnect(dfile1)
     return site_info
@@ -145,7 +147,7 @@ def get_data(hts, sites=None, mtypes=None, from_date=None, to_date=None, agg_met
     site_info.loc[:, 'Start Time'] = site_info.loc[:, 'Start Time'].dt.ceil(str(agg_n) + pd_time_code).dt.strftime('%d-%b-%Y %H:%M:%S')
     site_info.loc[:, 'End Time'] = site_info.loc[:, 'End Time'].dt.strftime('%d-%b-%Y %H:%M:%S')
 
-    ht_interval = str(agg_n) + ' ' + agg_period
+    ht_interval = f'{str(agg_n)} ' + agg_period
 
     ## Extract the ts data
     data1 = []
@@ -162,11 +164,11 @@ def get_data(hts, sites=None, mtypes=None, from_date=None, to_date=None, agg_met
         except Exception as err:
             err1 = err
             print(err1)
-            print('Extraction failed for site ' + str(site) + ' and mtype ' + str(mtype))
+            print(f'Extraction failed for site {str(site)} and mtype {str(mtype)}')
             continue
 
         if d1.empty:
-            print('No data for site ' + str(site) + ' and mtype ' + str(mtype))
+            print(f'No data for site {str(site)} and mtype {str(mtype)}')
             continue
 
         if (pd_time_code == 'D'):

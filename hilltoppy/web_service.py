@@ -89,7 +89,7 @@ def build_url(base_url, hts, request, site=None, measurement=None, collection=No
     if not hts.endswith('.hts'):
         raise ValueError('The hts file must end with .hts')
     if request not in available_requests:
-        raise ValueError('request must be one of ' + str(available_requests))
+        raise ValueError(f'request must be one of {str(available_requests)}')
 
     ### Collect data for a URL in a dict
     data = {'Service': 'Hilltop', 'Request': request}
@@ -127,7 +127,7 @@ def build_url(base_url, hts, request, site=None, measurement=None, collection=No
             from_date = '1800-01-01'
         if to_date is None:
             to_date = 'now'
-        data['TimeInterval'] = str(from_date) + '/' + str(to_date)
+        data['TimeInterval'] = f'{str(from_date)}/{str(to_date)}'
         if alignment is not None:
             data['Alignment'] = alignment
 
@@ -172,8 +172,7 @@ def collection_list(base_url, hts):
         col_df['Filename'] = filename_list
         col_df.insert(0, "CollectionName", colname)
         collection_list.append(col_df)
-    collection_df = pd.concat(collection_list).reset_index(drop=True)
-    return collection_df
+    return pd.concat(collection_list).reset_index(drop=True)
 
 
 def site_list(base_url, hts, location=None, measurement=None, collection=None):
@@ -207,11 +206,11 @@ def site_list(base_url, hts, location=None, measurement=None, collection=None):
             children = list(s)
             if len(children) == 2:
                 locs1 = [float(l.text) for l in children]
-                sites_dict.update({site1: locs1})
+                sites_dict[site1] = locs1
             else:
-                sites_dict.update({site1: [np.nan, np.nan]})
+                sites_dict[site1] = [np.nan, np.nan]
 
-        if (location == 'Yes') or (location == True):
+        if location in ['Yes', True]:
             cols = ['Easting', 'Northing']
         elif location == 'LatLong':
             cols = ['lat', 'lon']
@@ -276,11 +275,7 @@ def measurement_list(base_url, hts, site, measurement=None, output_bad_sites=Fal
         d = data_sources[0]
         if d.attrib['Name'] == 'WQ Sample':
             print('Site only has WQ Sample')
-            if output_bad_sites:
-                return pd.DataFrame(), pd.DataFrame()
-            else:
-                return pd.DataFrame()
-
+            return (pd.DataFrame(), pd.DataFrame()) if output_bad_sites else pd.DataFrame()
     ### Extract data into DataFrame
     data_list = []
 
@@ -292,39 +287,36 @@ def measurement_list(base_url, hts, site, measurement=None, output_bad_sites=Fal
         ds_dict = {c.tag: c.text.encode('ascii', 'ignore').decode() for c in d if c.tag in ds_types}
         m_all = d.findall('Measurement')
         for m in m_all:
-            m_dict = {c.tag: c.text.encode('ascii', 'ignore').decode() for c in m if c.tag in m_types}
-            m_dict.update(ds_dict)
+            m_dict = {
+                c.tag: c.text.encode('ascii', 'ignore').decode()
+                for c in m
+                if c.tag in m_types
+            } | ds_dict
             data_list.append(m_dict)
 
     mtype_df = pd.DataFrame(data_list)
-    if not mtype_df.empty:
-        mtype_df.rename(columns={'RequestAs': 'Measurement'}, inplace=True)
-        if 'To' in mtype_df.columns:
-            mtype_df.To = pd.to_datetime(mtype_df.To, infer_datetime_format=True, errors='coerce')
-        if 'From' in mtype_df.columns:
-            mtype_df.From = pd.to_datetime(mtype_df.From, infer_datetime_format=True, errors='coerce')
-        if 'Units' in mtype_df.columns:
-            mtype_df = mtype_df.replace({'Units': {'%': np.nan}}).copy()
-        mtype_df['Site'] = site
+    if mtype_df.empty:
+        return (pd.DataFrame(), pd.DataFrame()) if output_bad_sites else pd.DataFrame()
+    mtype_df.rename(columns={'RequestAs': 'Measurement'}, inplace=True)
+    if 'To' in mtype_df.columns:
+        mtype_df.To = pd.to_datetime(mtype_df.To, infer_datetime_format=True, errors='coerce')
+    if 'From' in mtype_df.columns:
+        mtype_df.From = pd.to_datetime(mtype_df.From, infer_datetime_format=True, errors='coerce')
+    if 'Units' in mtype_df.columns:
+        mtype_df = mtype_df.replace({'Units': {'%': np.nan}}).copy()
+    mtype_df['Site'] = site
 
-        if output_bad_sites:
-            bad_sites = mtype_df[mtype_df['From'].isnull() | mtype_df['To'].isnull() | (mtype_df['From'] < '1900-01-01') | (mtype_df['To'] > pd.Timestamp.today())]
+    if not output_bad_sites:
+        return mtype_df.set_index(['Site', 'Measurement'])
 
-            if bad_sites.empty:
-                return mtype_df.set_index(['Site', 'Measurement']), pd.DataFrame()
-            else:
-                print('There are ' + str(len(bad_sites)) + ' sites with bad times')
+    bad_sites = mtype_df[mtype_df['From'].isnull() | mtype_df['To'].isnull() | (mtype_df['From'] < '1900-01-01') | (mtype_df['To'] > pd.Timestamp.today())]
+
+    if bad_sites.empty:
+        return mtype_df.set_index(['Site', 'Measurement']), pd.DataFrame()
+    print(f'There are {len(bad_sites)} sites with bad times')
     #            print(bad_sites)
-                mtype_df = mtype_df[~(mtype_df['From'].isnull() | mtype_df['To'].isnull() | (mtype_df['From'] < '1900-01-01') | (mtype_df['To'] > pd.Timestamp.today()))]
-                return mtype_df.set_index(['Site', 'Measurement']), bad_sites
-        else:
-            return mtype_df.set_index(['Site', 'Measurement'])
-
-    else:
-        if output_bad_sites:
-            return pd.DataFrame(), pd.DataFrame()
-        else:
-            return pd.DataFrame()
+    mtype_df = mtype_df[~(mtype_df['From'].isnull() | mtype_df['To'].isnull() | (mtype_df['From'] < '1900-01-01') | (mtype_df['To'] > pd.Timestamp.today()))]
+    return mtype_df.set_index(['Site', 'Measurement']), bad_sites
 
 
 def measurement_list_all(base_url, hts):
@@ -350,9 +342,7 @@ def measurement_list_all(base_url, hts):
 #        print(s)
         m1 = measurement_list(base_url, hts, s)
         mtype_list.append(m1)
-    mtype_df = pd.concat(mtype_list)
-
-    return mtype_df
+    return pd.concat(mtype_list)
 
 
 def get_data(base_url, hts, site, measurement, from_date=None, to_date=None, agg_method=None, agg_interval=None, alignment='00:00', parameters=False, dtl_method=None, quality_codes=False, tstype=None, ignore_gaps=True):

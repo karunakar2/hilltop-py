@@ -41,7 +41,7 @@ def parse_dsn(dsn_path):
             files1 = [os.path.join(base_path, i[1]) for i in p1.items('Hilltop') if 'file' in i[0]]
             hts1.extend([i for i in files1 if i.endswith('.hts')])
             dsn1.remove(f)
-            dsn1[0:0] = [i for i in files1 if i.endswith('.dsn')]
+            dsn1[:0] = [i for i in files1 if i.endswith('.dsn')]
     return hts1
 
 
@@ -50,8 +50,13 @@ def pytime_to_datetime(pytime):
     Function to convert a PyTime object to a datetime object.
     """
 
-    dt1 = datetime(year=pytime.year, month=pytime.month, day=pytime.day, hour=pytime.hour, minute=pytime.minute)
-    return dt1
+    return datetime(
+        year=pytime.year,
+        month=pytime.month,
+        day=pytime.day,
+        hour=pytime.hour,
+        minute=pytime.minute,
+    )
 
 
 def time_switch(x):
@@ -91,17 +96,12 @@ def convert_site_names(names, rem_m=True):
     names1 = names1.str.upper()
     if rem_m:
         list_names1 = names1.str.findall(r'[A-Z]+\d+/\d+')
-        names_len_bool = list_names1.apply(lambda x: len(x)) == 1
-        names2 = names1.copy()
-        names2[names_len_bool] = list_names1[names_len_bool].apply(lambda x: x[0])
-        names2[~names_len_bool] = np.nan
     else:
         list_names1 = names1.str.findall(r'[A-Z]+\d+/\d+\s*-\s*M\d*')
-        names_len_bool = list_names1.apply(lambda x: len(x)) == 1
-        names2 = names1.copy()
-        names2[names_len_bool] = list_names1[names_len_bool].apply(lambda x: x[0])
-        names2[~names_len_bool] = np.nan
-
+    names_len_bool = list_names1.apply(lambda x: len(x)) == 1
+    names2 = names1.copy()
+    names2[names_len_bool] = list_names1[names_len_bool].apply(lambda x: x[0])
+    names2[~names_len_bool] = np.nan
     return names2
 
 
@@ -155,10 +155,7 @@ def proc_ht_use_data_ws(ht_data):
     df2 = df1.drop('Measurement', axis=1)
     df2.loc[:, 'Site'] = df2.loc[:, 'Site'].str.upper()
 
-    ### Remove duplicate WAPs
-    df3 = df2.groupby(['Site', 'DateTime']).Value.last()
-
-    return df3
+    return df2.groupby(['Site', 'DateTime']).Value.last()
 
 
 def proc_ht_use_data(ht_data):
@@ -211,7 +208,4 @@ def proc_ht_use_data(ht_data):
     df2 = df1.drop('Measurement', axis=1)
     df2.loc[:, 'Site'] = df2.loc[:, 'Site'].str.upper()
 
-    ### Remove duplicate WAPs
-    df3 = df2.groupby(['Site', 'DateTime']).Value.last()
-
-    return df3
+    return df2.groupby(['Site', 'DateTime']).Value.last()

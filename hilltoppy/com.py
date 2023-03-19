@@ -66,11 +66,7 @@ def measurement_list(hts, sites=None, mtypes=None, rem_wq_sample=True):
     cat.StartSiteEnum
     while cat.GetNextSite:
         site_name = str(cat.SiteName.encode('ascii', 'ignore').decode())
-        if sites is None:
-            pass
-        elif site_name in sites:
-            pass
-        else:
+        if sites is not None and site_name not in sites:
             continue
         while cat.GetNextDataSource:
             ds_name = str(cat.DataSource.encode('ascii', 'ignore').decode())
@@ -78,21 +74,18 @@ def measurement_list(hts, sites=None, mtypes=None, rem_wq_sample=True):
                 start1 = pytime_to_datetime(cat.DataStartTime)
                 end1 = pytime_to_datetime(cat.DataEndTime)
             except ValueError:
-                bool_site = dfile.FromSite(site_name, ds_name, 1)
-                if bool_site:
+                if bool_site := dfile.FromSite(site_name, ds_name, 1):
                     start1 = pytime_to_datetime(cat.DataStartTime)
                     end1 = pytime_to_datetime(cat.DataEndTime)
                 else:
-                    print('No site data for ' + site_name + '...for some reason...')
+                    print(f'No site data for {site_name}...for some reason...')
             while cat.GetNextMeasurement:
                 mtype1 = str(cat.Measurement.encode('ascii', 'ignore').decode())
-                if mtype1 == 'Item2':
-                    continue
-                elif mtypes is None:
-                    pass
-                elif mtype1 in mtypes:
-                    pass
-                else:
+                if (
+                    mtype1 == 'Item2'
+                    or mtypes is not None
+                    and mtype1 not in mtypes
+                ):
                     continue
                 divisor = cat.Divisor
                 unit1 = str(cat.Units.encode('ascii', 'ignore').decode())
@@ -143,8 +136,6 @@ def get_data_quantity(hts, sites=None, mtypes=None, start=None, end=None, agg_pe
 
     agg_name_dict = {'sum': 4, 'count': 5, 'mean': 1}
     agg_unit_dict = {'l/s': 1, 'm3/s': 1, 'm3/hour': 1, 'mm': 1, 'm3': 4}
-    unit_convert = {'l/s': 0.001, 'm3/s': 1, 'm3/hour': 1, 'mm': 1, 'm3': 1}
-
     ### First read all of the sites in the hts file and select the ones to be read
     if not isinstance(sites_df, DataFrame):
         sites_df = measurement_list(hts, sites=sites, mtypes=mtypes)
@@ -171,10 +162,7 @@ def get_data_quantity(hts, sites=None, mtypes=None, start=None, end=None, agg_pe
         site = sites_df.loc[i, 'site']
         mtype = sites_df.loc[i, 'mtype']
         unit = sites_df.loc[i, 'unit']
-        if fun is None:
-            agg_val = agg_unit_dict[unit]
-        else:
-            agg_val = agg_name_dict[fun]
+        agg_val = agg_unit_dict[unit] if fun is None else agg_name_dict[fun]
         if dfile.FromSite(site, mtype, 1):
 
             ## Set up start and end times and aggregation initiation
@@ -190,25 +178,20 @@ def get_data_quantity(hts, sites=None, mtypes=None, start=None, end=None, agg_pe
                     start1 = dfile.DataStartTime
             else:
                 start1 = start
-            if end is None:
-                end1 = dfile.DataEndTime
-            else:
-                end1 = end
+            end1 = dfile.DataEndTime if end is None else end
             if not dfile.FromTimeRange(start1, end1):
                 continue
             if (agg_period is not None):
-                dfile.SetMode(agg_val, str(agg_n) + ' ' + agg_period)
+                dfile.SetMode(agg_val, f'{str(agg_n)} ' + agg_period)
 
-            ## Extract data
-            data = []
-            time = []
             if dfile.getsinglevbs == 0:
                 t1 = dfile.value
                 if isinstance(t1, str):
                     print('site ' + site + ' has nonsense data')
                 else:
-                    data.append(t1)
-                    time.append(str(pytime_to_datetime(dfile.time)))
+                                ## Extract data
+                    data = [t1]
+                    time = [str(pytime_to_datetime(dfile.time))]
                     while dfile.getsinglevbs != 2:
                         data.append(dfile.value)
                         time.append(str(pytime_to_datetime(dfile.time)))
@@ -220,13 +203,12 @@ def get_data_quantity(hts, sites=None, mtypes=None, start=None, end=None, agg_pe
     if df_lst:
         df1 = concat(df_lst)
         df1.loc[:, 'time'] = to_datetime(df1.loc[:, 'time'])
+        unit_convert = {'l/s': 0.001, 'm3/s': 1, 'm3/hour': 1, 'mm': 1, 'm3': 1}
+
         df2 = df1.set_index(['mtype', 'site', 'time']).data * unit_convert[unit]
     else:
         df2 = DataFrame([], index=['mtype', 'site', 'time'])
-    if output_site_data:
-        return df2, sites_df
-    else:
-        return df2
+    return (df2, sites_df) if output_site_data else df2
 
 
 def get_data_quality(hts, sites=None, mtypes=None, start=None, end=None, dtl_method=None, output_site_data=False, mtype_params=None, sample_params=None, sites_df=None):
@@ -367,11 +349,10 @@ def get_data_quality(hts, sites=None, mtypes=None, start=None, end=None, dtl_met
         else:
             data3 = data
 
-        if output_site_data:
-            sites_df = sites_df[~(sites_df.mtype == 'WQ Sample')]
-            return data3, sites_df
-        else:
+        if not output_site_data:
             return data3
+        sites_df = sites_df[~(sites_df.mtype == 'WQ Sample')]
+        return data3, sites_df
 
 
 def write_wq_data(hts, data):
